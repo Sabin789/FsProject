@@ -25,7 +25,7 @@ app.use(Express.json())
 //It needs to alwys be b4 the endpoints
 app.use("/authors",AuthorRouter)
 app.use("/blogPosts",BlogsRouter)
-app.use("/files",filesRouter)
+// app.use("/files",filesRouter)
 //unless they are error handlers in wihich case they shoudl be after th endpoints
 
 
