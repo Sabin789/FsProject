@@ -1,7 +1,7 @@
 import fs from "fs-extra"
 import { fileURLToPath } from "url"; 
 import { dirname,join } from "path";
-import { writeFile } from "fs";
+import { writeFile, writeFileSync } from "fs";
 
 const {readJSON,writeJSON}=fs
 
@@ -12,10 +12,10 @@ const AuthorsFileToJson=join(dataFloderPath,"authors.json")
 
 const BlogsToJson=join(dataFloderPath,"blogs.json")
 
- const userPubliFolderPath=join(dirname(process.cwd()),"./public/image/users")
-console.log(userPubliFolderPath)
+ const userPubliFolderPath=join(dirname(process.cwd()),"./public/img/blogPosts")
+// console.log(userPubliFolderPath)
 export const getAuthors=()=>readJSON(AuthorsFileToJson)
 export const WriteAuthor=authorArray=>writeJSON(AuthorsFileToJson,authorArray)
 export const getBlogs=()=>readJSON(BlogsToJson)
 export const writeBook=BlogsArray=>writeJSON(BlogsToJson,BlogsArray)
-export const saveUserAvatar= (fileName,fileContentAsBuffer)=>writeFile(join(userPubliFolderPath, fileName), fileContentAsBuffer)
+export const saveUserAvatar= (fileName,fileContentAsBuffer)=>writeFileSync(join(userPubliFolderPath, fileName), fileContentAsBuffer)

@@ -7,7 +7,10 @@ import { checkBlogSchema, triggerBadeRequest } from "../authors/validation.js";
 import { notFoundHandler } from "../errorHandlers.js";
 import createHttpError from "http-errors"
 import { getBlogs,writeBook } from "../../lib/fs-tools.js";
+import multer from "multer"
+import { extname } from "path";
 
+import { saveUserAvatar } from "../../lib/fs-tools.js";
 
 
 // const BlogsToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/blogs.json")
@@ -15,7 +18,7 @@ import { getBlogs,writeBook } from "../../lib/fs-tools.js";
 // console.log(BlogsToJson)
 
 const BlogsRouter=Express.Router()  
-// const getBlogs =()=>JSON.parse(fs.readFileSync(BlogsToJson))
+// const getBlogs2 =()=>JSON.parse(fs.readFileSync(BlogsToJson))
 // const writeBook=(blogsArray)=>fs.writeFileSync(BlogsToJson,JSON.stringify(blogsArray))
 
 
@@ -58,7 +61,7 @@ try{
 BlogsRouter.get("/:blogId",notFoundHandler,async(req,res,next)=>{
     try{
     const blogs= await getBlogs()
-   const singleBlog=blogs.find(s=>s._id===req.params.blogId)
+   const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
    if(singleBlog){
    res.send(singleBlog)
    }else{
@@ -90,12 +93,105 @@ BlogsRouter.put("/:blogId",async (req,res)=>{
 
 BlogsRouter.delete("/:blogId",async(req,res)=>{
     try{
-    const blogs=getBlogs()
+    const blogs=await getBlogs()
     const remaining=blogs.filter(a=>a._id!==req.params.blogId)
-    writeBook(remaining)
+   await writeBook(remaining)
     res.status(204).send()
     }catch(err){
         console.log(err)
+    }
+})
+
+BlogsRouter.post("/:blogId/comments",async(req,res)=>{
+    try{
+        const blogs = await getBlogs();
+        const newComment = { ...req.body, id: uniqid() };
+        
+        if (newComment) {
+            const index=blogs.findIndex(a=>a._id===req.params.blogId)
+
+            const  currentBlog=blogs[index]
+            const commentsArray=currentBlog.comments
+          commentsArray.push(newComment)
+          await writeBook(blogs)
+          res.status(201).send({ id:newComment.id});
+        }
+    }catch(err){
+        console.log(err)
+    }
+})
+
+BlogsRouter.get("/:blogId/comments",async(req,res)=>{
+    try{
+        const blogs = await getBlogs();
+        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+
+  
+        const commentsArray=singleBlog.comments
+        res.status(200).send(commentsArray);
+    }catch(err){
+        console.log(err)
+    }
+})
+
+BlogsRouter.post("/blogPosts/:blogId/uploadCover",  multer().single(),async (req,res,next)=>{
+    try{
+        console.log(req.file)
+        const originalFileExt=extname(req.file.originalname)
+        const fileName=req.params.blogId+originalFileExt
+       saveUserAvatar(fileName,req.file.buffer)
+       res.send({message:"file Uploaded"})
+    }catch(err){
+        next(err)
+    }
+})
+
+BlogsRouter.get("/:blogId/comments/:commentId",async(req,res)=>{
+    try{
+        const blogs = await getBlogs();
+        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+
+  
+        const commentsArray=singleBlog.comments
+       const  singleComment= await commentsArray.find(s=>s.id===req.params.commentId)
+        res.status(200).send(singleComment);
+    }catch(err){
+        console.log(err)
+    }
+})
+
+BlogsRouter.put("/:blogId/comments/:commentId",async(req,res)=>{
+    try{
+        const blogs = await getBlogs();
+        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+
+  
+        const commentsArray=singleBlog.comments
+       const  index= await commentsArray.findIndex(s=>s.id===req.params.commentId)
+        const currentComment=commentsArray[index]
+        const updated={...currentComment,...req.body}
+        commentsArray[index]=updated
+        await writeBook(blogs)
+        res.send(updated)
+   
+
+
+    }catch(err){
+
+    }
+})
+
+BlogsRouter.delete("/:blogId/comments/:commentId",async(req,res)=>{
+    try{
+        const blogs=await getBlogs()
+        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+        const commentsArray=singleBlog.comments
+
+        const remaining=commentsArray.filter(a=>a._id!==req.params.commentId)
+       await writeBook(remaining)
+        res.status(204).send()
+    }catch(err){
+     console.log(err)
     }
 })
 
