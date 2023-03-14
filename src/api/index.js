@@ -7,7 +7,7 @@ import cors from 'cors';
 import BlogsRouter from "./books/index.js";
 import { badRequestHandler, genericErrorHandler, notFoundHandler, unauthorizedHandler } from "./errorHandlers.js";
 import filesRouter from "./files/index.js";
-
+import mongoose from "mongoose";
 const app=Express()
 
 const port=3003
@@ -25,6 +25,7 @@ app.use(Express.json())
 //It needs to alwys be b4 the endpoints
 app.use("/authors",AuthorRouter)
 app.use("/blogPosts",BlogsRouter)
+app.use("/blogPosts",filesRouter)
 // app.use("/files",filesRouter)
 //unless they are error handlers in wihich case they shoudl be after th endpoints
 
@@ -33,6 +34,11 @@ app.use(badRequestHandler)
 app.use(unauthorizedHandler) 
 app.use(notFoundHandler) 
 app.use(genericErrorHandler)
+
+mongoose.connect(process.env.MONGO_URL)
+mongoose.connection.on("connected",()=>{
+    console.log("succesfully connected to mongo")
+})
 
 app.listen(port,()=>{
     // console.table(listEndpoints(app))

@@ -1,6 +1,10 @@
+import mongoose from "mongoose"
+
 export const badRequestHandler=(err,req,res,next)=>{
-    if(err.status===400){
-        res.status(400).send({succes:false,message: err.message, errorsList: err.errorsList.map(e => e.msg) })
+    if(err.status===400||err instanceof mongoose.Error.ValidationError){
+      res.status(400).send({succes:false,message: err.message, errorsList: err.errorsList? err.errorsList.map(e => e.msg):"" })
+    }else if(err instanceof mongoose.Error.CastError ){
+      res.status(400).send({message:"You sent a wrong id"})
     }else{
         next(err)
     }

@@ -5,6 +5,8 @@ import { dirname,join } from "path";
 import uniqid from "uniqid"
 import { checkAuthorSchema, checkBlogSchema, triggerBadeRequest } from "./validation.js";
 import { getAuthors,WriteAuthor } from "../../lib/fs-tools.js";
+import { sendRegistrationEmail } from "../../lib/email-tools.js";
+import { nextTick } from "process";
 
 const AuthorsFileToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/authors.json")
 console.log(AuthorsFileToJson)
@@ -16,22 +18,30 @@ const AuthorRouter=Express.Router()
 
 
 //-------------2{
-AuthorRouter.post("/",checkAuthorSchema,triggerBadeRequest,(req,res)=>{
-    const newAuthor={...req.body,id:uniqid()}
-    const fileName=fs.readFileSync(AuthorsFileToJson)
- const array=JSON.parse(fileName)
- const filtered=array.filter(a=>a.email===newAuthor.email)
- if(filtered===true){
+AuthorRouter.post("/",checkAuthorSchema,triggerBadeRequest,async (req,res,next)=>{
+    try{
+        const authors=await getAuthors()
+        const newAuthor={...req.body,id:uniqid()}
+    }catch(err){
+        next(err)
+    }
+//     const newAuthor={...req.body,id:uniqid()}
+//     const fileName=fs.readFileSync(AuthorsFileToJson)
+//  const array=JSON.parse(fileName)
+//  const filtered=array.filter(a=>a.email===newAuthor.email)
 
-    res.send({message:"Email addres already in use"})
+//  if(filtered===true){
+  
+//     res.send({message:"Email addres already in use"})
 
- }else{
+//  }else{
  
- array.push(newAuthor)
+//  array.push(newAuthor)
 
- fs.writeFileSync(AuthorsFileToJson,JSON.stringify(array))
-
- res.status(201).send({ id: newAuthor.id })}
+//  fs.writeFileSync(AuthorsFileToJson,JSON.stringify(array))
+//  sendRegistrationEmail(newAuthor.email)
+//  res.send("sent to "+newAuthor.email)
+//  res.status(201).send({ id: newAuthor.id })}
  }
  )
 
@@ -84,4 +94,19 @@ AuthorRouter.get("/:authorId/blogPosts",(req,res)=>{
     const corresponding=array.filter(a=>a.author.name===singleAuthor.name)
     res.send(corresponding)
 })
+
+// AuthorRouter.post("/:authorId/register", async(req,res,next)=>{
+//     try{
+//         const fileName=fs.readFileSync(AuthorsFileToJson)
+//         const author=JSON.parse(fileName)
+//         const singleAuthor=author.find(a=>a.id===req.params.authorId)
+//         // const {email}=singleAuthor
+//          sendRegistrationEmail(singleAuthor.email)
+//         res.send("sent to "+singleAuthor.email)
+//     }catch(err){
+//         console.log(err)
+//     }
+// })
+
+
 export default  AuthorRouter

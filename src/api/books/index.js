@@ -1,15 +1,11 @@
 import  Express  from "express";
-import fs from "fs"
-import { fileURLToPath } from "url"; 
-import { dirname,join } from "path";
 import uniqid from "uniqid"
-import { checkBlogSchema, triggerBadeRequest } from "../authors/validation.js";
 import { notFoundHandler } from "../errorHandlers.js";
 import createHttpError from "http-errors"
 import { getBlogs,writeBook } from "../../lib/fs-tools.js";
 import multer from "multer"
 import { extname } from "path";
-
+import blogSchema from "../validation/model.js";
 import { saveUserAvatar } from "../../lib/fs-tools.js";
 
 
@@ -23,17 +19,16 @@ const BlogsRouter=Express.Router()
 
 
 
-BlogsRouter.post("/",checkBlogSchema,triggerBadeRequest,async(req,res,next)=>{
+BlogsRouter.post("/",async(req,res,next)=>{
     try{
-    const blogs= await getBlogs()
-  const newBlog={...req.body,_id:uniqid(),content:"HTML",createdAt:new Date(),comments:[]}
-if(newBlog){
-  blogs.push(newBlog)
- await writeBook(blogs)
- res.status(201).send({_id:newBlog._id})
+
+  const newBlog=new blogSchema(req.body)
+const {_id}=await newBlog.save()
+  
+ res.status(201).send({_id:_id})
 
 
-}
+
     }catch(err){
   
 return  next(err)     }
@@ -43,30 +38,40 @@ return  next(err)     }
 
 BlogsRouter.get("/",async(req,res,next)=>{
 try{
-    const blogs=await getBlogs()
-    if(req.query && req.query.title){
-        const filteredBlogs=blogs.filter(b=>b.title===req.query.title)
-        res.send(filteredBlogs)
+    // const blogs=await getBlogs()
+    // if(req.query && req.query.title){
+    //     const filteredBlogs=blogs.filter(b=>b.title===req.query.title)
+    //     res.send(filteredBlogs)
       
-    }else{
+    // }else{
+    // res.send(blogs)
+    // console.log("hello")
+    // }
+    const blogs=await blogSchema.find()
     res.send(blogs)
-    console.log("hello")
-    }}catch(err){
+}catch(err){
      res.send(next(err))
     }
+
 
 })
 
 
 BlogsRouter.get("/:blogId",notFoundHandler,async(req,res,next)=>{
     try{
-    const blogs= await getBlogs()
-   const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
-   if(singleBlog){
-   res.send(singleBlog)
-   }else{
-    res.send((createHttpError(404, `Book with id ${req.params.bookId} not found!`))) 
+//     const blogs= await getBlogs()
+//    const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+//    if(singleBlog){
+//    res.send(singleBlog)
 
+//    else{
+//     res.send((createHttpError(404, `Book with id ${req.params.bookId} not found!`))) 
+//    }
+const blog=await blogSchema.findById(req.params.blogId)
+   if(blog){
+res.send(blog)
+   }else{
+    res.send((createHttpError(404, `Blog with id ${req.params.bookId} not found!`))) 
    }
 }catch(err){
     res.send(next(err))
@@ -74,31 +79,48 @@ BlogsRouter.get("/:blogId",notFoundHandler,async(req,res,next)=>{
 })
 
 
-BlogsRouter.put("/:blogId",async (req,res)=>{
+BlogsRouter.put("/:blogId",async (req,res,next)=>{
     try{
-    const blogs=await getBlogs()
-    const index=blogs.findIndex(a=>a._id===req.params.blogId)
+//     const blogs=await getBlogs()
+//     const index=blogs.findIndex(a=>a._id===req.params.blogId)
 
-  const  currentBlog=blogs[index]
-  const updated={...currentBlog,...req.body}
-  blogs[index]=updated
-  await writeBook(blogs)
-  res.send(updated)
+//   const  currentBlog=blogs[index]
+//   const updated={...currentBlog,...req.body}
+//   blogs[index]=updated
+//   await writeBook(blogs)
+//   res.send(updated)
+let updated=await blogSchema.findByIdAndUpdate(
+    req.params.blogId,
+    req.body,
+    {new:true,runValidators:true}
+
+)
+if(updated){
+    res.send(updated)
+}else{
+    next(createHttpError(404, `Blog with id ${req.params.blogId} not found!`))
+
+}
     }catch(err){
-        console.log(err)
+       next(err)
     }
 
 })
 
 
-BlogsRouter.delete("/:blogId",async(req,res)=>{
+BlogsRouter.delete("/:blogId",async(req,res,next)=>{
     try{
-    const blogs=await getBlogs()
-    const remaining=blogs.filter(a=>a._id!==req.params.blogId)
-   await writeBook(remaining)
+//     const blogs=await getBlogs()
+//     const remaining=blogs.filter(a=>a._id!==req.params.blogId)
+//    await writeBook(remaining)
+const deleted= await blogSchema.findByIdAndDelete(req.params.blogId)
+   if(deleted){
     res.status(204).send()
+   }else{
+
+   }
     }catch(err){
-        console.log(err)
+        next(err)
     }
 })
 
