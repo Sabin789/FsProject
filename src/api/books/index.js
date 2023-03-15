@@ -7,8 +7,7 @@ import multer from "multer"
 import { extname } from "path";
 import blogSchema from "../validation/model.js";
 import { saveUserAvatar } from "../../lib/fs-tools.js";
-
-
+import q2m from "query-to-mongo"
 // const BlogsToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/blogs.json")
 // console.log(BlogsToJson)
 // console.log(BlogsToJson)
@@ -16,6 +15,7 @@ import { saveUserAvatar } from "../../lib/fs-tools.js";
 const BlogsRouter=Express.Router()  
 // const getBlogs2 =()=>JSON.parse(fs.readFileSync(BlogsToJson))
 // const writeBook=(blogsArray)=>fs.writeFileSync(BlogsToJson,JSON.stringify(blogsArray))
+
 
 
 
@@ -47,8 +47,24 @@ try{
     // res.send(blogs)
     // console.log("hello")
     // }
-    const blogs=await blogSchema.find()
-    res.send(blogs)
+    console.log("req.query:", req.query)
+    console.log("q2m:", q2m(req.query))
+    const mongoQuery = q2m(req.query)
+
+    const allBlogs = await blogSchema.find(mongoQuery.criteria, mongoQuery.options.fields)
+      .limit(mongoQuery.options.limit)
+      .skip(mongoQuery.options.skip)
+      .sort(mongoQuery.options.sort)
+    const total = await blogSchema.countDocuments(mongoQuery.criteria)
+    // no matter the order of usage of these methods, Mongo will ALWAYS apply SORT then SKIP then LIMIT
+    res.send({
+      links: mongoQuery.links("http://localhost:3003/blogPosts/", total),
+      total,
+      numberOfPages: Math.ceil(total / mongoQuery.options.limit),
+      allBlogs,
+    })
+    // const blogs=await blogSchema.find().limit(10).skip()
+    // res.send(blogs)
 }catch(err){
      res.send(next(err))
     }
@@ -126,33 +142,56 @@ const deleted= await blogSchema.findByIdAndDelete(req.params.blogId)
 
 BlogsRouter.post("/:blogId/comments",async(req,res)=>{
     try{
-        const blogs = await getBlogs();
-        const newComment = { ...req.body, id: uniqid() };
-        
-        if (newComment) {
-            const index=blogs.findIndex(a=>a._id===req.params.blogId)
+    
+     
+        const newComment=req.body
 
-            const  currentBlog=blogs[index]
-            const commentsArray=currentBlog.comments
-          commentsArray.push(newComment)
-          await writeBook(blogs)
-          res.status(201).send({ id:newComment.id});
+        const updatedBlog=await blogSchema.findByIdAndUpdate(
+            req.params.blogId,
+            {$push:{comments:newComment}},
+            { new: true, runValidators: true }
+        )
+
+        if(updatedBlog){
+            res.send(updatedBlog)
         }
+      
+
+    //     const newComment=new Commment(req.body)
+        
+    // //    const {_id}=await newComment.save()
+    //     if (newComment) {
+           
+    //         const blog=await blogSchema.findById(req.params.blogId)
+            
+    //         const commentsArray=blog
+    //       commentsArray.push(newComment)
+      
+    //       res.status(201).send({ id:newComment.id});
+    //     }
     }catch(err){
         console.log(err)
     }
 })
 
-BlogsRouter.get("/:blogId/comments",async(req,res)=>{
+BlogsRouter.get("/:blogId/comments",async(req,res,next)=>{
     try{
-        const blogs = await getBlogs();
-        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+        // const blogs = await getBlogs();
+        // const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
 
   
-        const commentsArray=singleBlog.comments
-        res.status(200).send(commentsArray);
+        // const commentsArray=singleBlog.comments
+        // res.status(200).send(commentsArray);
+        let blog=await blogSchema.findById(req.params.blogId)
+        if(blog){
+            
+          res.send(blog.comments)
+        }else{
+            next(createHttpError(404, `Blog with id ${req.body.blogId} not found!`))
+
+        }
     }catch(err){
-        console.log(err)
+       next(err)
     }
 })
 
@@ -168,55 +207,93 @@ BlogsRouter.post("/blogPosts/:blogId/uploadCover",  multer().single(),async (req
     }
 })
 
-BlogsRouter.get("/:blogId/comments/:commentId",async(req,res)=>{
+BlogsRouter.get("/:blogId/comments/:commentId",async(req,res,next)=>{
     try{
-        const blogs = await getBlogs();
-        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+    //     const blogs = await getBlogs();
+    //     const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
 
   
-        const commentsArray=singleBlog.comments
-       const  singleComment= await commentsArray.find(s=>s.id===req.params.commentId)
-        res.status(200).send(singleComment);
+    //     const commentsArray=singleBlog.comments
+    //    const  singleComment= await commentsArray.find(s=>s.id===req.params.commentId)
+    //     res.status(200).send(singleComment);
+    const blog=await blogSchema.findById(req.params.blogId)
+    const comment= blog.comments.find(book => book._id.toString() === req.params.commentId)
+    if(comment){
+        res.send(comment)
+    }else {
+        next(createHttpError(404, `Comment with id ${req.body.blogId} not found!`))
+      }
     }catch(err){
-        console.log(err)
+       next(err)
     }
 })
 
-BlogsRouter.put("/:blogId/comments/:commentId",async(req,res)=>{
+BlogsRouter.put("/:blogId/comments/:commentId",async(req,res,next)=>{
     try{
-        const blogs = await getBlogs();
-        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
+    //     const blogs = await getBlogs();
+    //     const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
 
   
-        const commentsArray=singleBlog.comments
-       const  index= await commentsArray.findIndex(s=>s.id===req.params.commentId)
-        const currentComment=commentsArray[index]
-        const updated={...currentComment,...req.body}
-        commentsArray[index]=updated
-        await writeBook(blogs)
-        res.send(updated)
+    //     const commentsArray=singleBlog.comments
+    //    const  index= await commentsArray.findIndex(s=>s.id===req.params.commentId)
+    //     const currentComment=commentsArray[index]
+    //     const updated={...currentComment,...req.body}
+    //     commentsArray[index]=updated
+    //     await writeBook(blogs)
+    //     res.send(updated)
    
+    const blog=await blogSchema.findById(req.params.blogId)
+    if(blog){
+  
+        let index= blog.comments.findIndex(comment => comment._id.toString() === req.params.commentId)
+     
+        if(index!==-1){
+            blog.comments[index]={...blog.comments[index],_id: req.params.commentId,...req.body}
+            await blog.save()
+            res.send(blog)
+        }else{
+          next(createHttpError(404, `Comment with id ${req.body.commentId} not found!`))
+        }
+    }else{
+        next(createHttpError(404, `Blog with id ${req.body.blogId} not found!`))
 
-
+    }
+  
+   
     }catch(err){
-
+    next(err)
     }
 })
 
-BlogsRouter.delete("/:blogId/comments/:commentId",async(req,res)=>{
+BlogsRouter.delete("/:blogId/comments/:commentId",async(req,res,next)=>{
     try{
-        const blogs=await getBlogs()
-        const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
-        const commentsArray=singleBlog.comments
+        // const blogs=await getBlogs()
+        // const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
 
-        const remaining=commentsArray.filter(a=>a._id!==req.params.commentId)
-       await writeBook(remaining)
-        res.status(204).send()
+        // const commentsArray=singleBlog.comments
+
+    //     const remaining=commentsArray.filter(a=>a._id!==req.params.commentId)
+    //    await writeBook(remaining)
+    //     res.status(204).send()
+    const updatedBlog = await blogSchema.findByIdAndUpdate(
+        req.params.blogId, // WHO
+        { $pull: { comments: { _id: req.params.commentId } } }, // HOW
+        { new: true, runValidators: true } // OPTIONS
+      )
+      if (updatedBlog) {
+        res.send(updatedBlog)
+      } else {
+        next(createHttpError(404, `User with id ${req.params.userId} not found!`))
+      }
     }catch(err){
-     console.log(err)
+   next(err)
     }
 })
 
+
+//Embedded
+
+BlogsRouter.post("/:blogId/")
 
 
 

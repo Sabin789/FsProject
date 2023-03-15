@@ -8,14 +8,19 @@ const blogSchema= new Schema({
     cover:{type:String,default:""},
     readTime:{
         value:{type:Number,required:true},
-        unit:{type:String,required:true}
+        unit:{type:String,required:true,enum: ["history", "romance", "horror", "fantasy"],}
     },
     author:{
         name:{type:String ,required:true,minLength: 3, maxLength: 12},
         avatar:{type:String,default:""}
-    }
-
-    
+    },
+    comments:[
+        {
+            comment:{type:String,required:true},
+            rate:{type:Number,min:1,max:5}
+        },
+        {timestamps:true}
+    ]
 },
 {timestamps:true}//makes created and updated at
 )
