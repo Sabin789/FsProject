@@ -8,6 +8,7 @@ import { extname } from "path";
 import blogSchema from "../validation/model.js";
 import { saveUserAvatar } from "../../lib/fs-tools.js";
 import q2m from "query-to-mongo"
+import authorModel from "../validation/authorModel.js";
 // const BlogsToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/blogs.json")
 // console.log(BlogsToJson)
 // console.log(BlogsToJson)
@@ -35,18 +36,8 @@ return  next(err)     }
   
 })
 
-
 BlogsRouter.get("/",async(req,res,next)=>{
 try{
-    // const blogs=await getBlogs()
-    // if(req.query && req.query.title){
-    //     const filteredBlogs=blogs.filter(b=>b.title===req.query.title)
-    //     res.send(filteredBlogs)
-      
-    // }else{
-    // res.send(blogs)
-    // console.log("hello")
-    // }
     console.log("req.query:", req.query)
     console.log("q2m:", q2m(req.query))
     const mongoQuery = q2m(req.query)
@@ -55,16 +46,15 @@ try{
       .limit(mongoQuery.options.limit)
       .skip(mongoQuery.options.skip)
       .sort(mongoQuery.options.sort)
+      .populate({path:"authors",select:"email name"})
+      .populate({path:"likes",select:"email name"})
     const total = await blogSchema.countDocuments(mongoQuery.criteria)
-    // no matter the order of usage of these methods, Mongo will ALWAYS apply SORT then SKIP then LIMIT
     res.send({
       links: mongoQuery.links("http://localhost:3003/blogPosts/", total),
       total,
       numberOfPages: Math.ceil(total / mongoQuery.options.limit),
       allBlogs,
     })
-    // const blogs=await blogSchema.find().limit(10).skip()
-    // res.send(blogs)
 }catch(err){
      res.send(next(err))
     }
@@ -75,14 +65,6 @@ try{
 
 BlogsRouter.get("/:blogId",notFoundHandler,async(req,res,next)=>{
     try{
-//     const blogs= await getBlogs()
-//    const singleBlog=await blogs.find(s=>s._id===req.params.blogId)
-//    if(singleBlog){
-//    res.send(singleBlog)
-
-//    else{
-//     res.send((createHttpError(404, `Book with id ${req.params.bookId} not found!`))) 
-//    }
 const blog=await blogSchema.findById(req.params.blogId)
    if(blog){
 res.send(blog)
@@ -221,7 +203,7 @@ BlogsRouter.get("/:blogId/comments/:commentId",async(req,res,next)=>{
     if(comment){
         res.send(comment)
     }else {
-        next(createHttpError(404, `Comment with id ${req.body.blogId} not found!`))
+        next(createHttpError(404, `Comment with id ${req.body.commentId} not found!`))
       }
     }catch(err){
        next(err)

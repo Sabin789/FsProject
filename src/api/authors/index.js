@@ -2,12 +2,8 @@ import  Express  from "express";
 import fs from "fs"
 import { fileURLToPath } from "url"; 
 import { dirname,join } from "path";
-import uniqid from "uniqid"
-import { checkAuthorSchema, checkBlogSchema, triggerBadeRequest } from "./validation.js";
-import { getAuthors,WriteAuthor } from "../../lib/fs-tools.js";
-import { sendRegistrationEmail } from "../../lib/email-tools.js";
-import { nextTick } from "process";
-
+import createHttpError from "http-errors"
+import authorModel from "../validation/authorModel.js";
 const AuthorsFileToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/authors.json")
 console.log(AuthorsFileToJson)
 //1
@@ -18,82 +14,102 @@ const AuthorRouter=Express.Router()
 
 
 //-------------2{
-AuthorRouter.post("/",checkAuthorSchema,triggerBadeRequest,async (req,res,next)=>{
+AuthorRouter.post("/",async (req,res,next)=>{
     try{
-        const authors=await getAuthors()
-        const newAuthor={...req.body,id:uniqid()}
+     const authors= await authorModel.find()
+
+    const newAuthor=new authorModel(req.body)
+    const exists=authors.find(a=>a.email===newAuthor.email)
+    if(exists){
+        res.send((createHttpError(400, `Author with email ${newAuthor.email} already exists!`))) 
+
+    }else{
+    const {_id}=await newAuthor.save()
+    res.status(201).send({_id:_id})
+    }
+
+
     }catch(err){
         next(err)
     }
-//     const newAuthor={...req.body,id:uniqid()}
-//     const fileName=fs.readFileSync(AuthorsFileToJson)
-//  const array=JSON.parse(fileName)
-//  const filtered=array.filter(a=>a.email===newAuthor.email)
 
-//  if(filtered===true){
-  
-//     res.send({message:"Email addres already in use"})
-
-//  }else{
- 
-//  array.push(newAuthor)
-
-//  fs.writeFileSync(AuthorsFileToJson,JSON.stringify(array))
-//  sendRegistrationEmail(newAuthor.email)
-//  res.send("sent to "+newAuthor.email)
-//  res.status(201).send({ id: newAuthor.id })}
  }
  )
 
 
-AuthorRouter.get("/",(req,res)=>{
- const fileName=fs.readFileSync(AuthorsFileToJson)
- const author=JSON.parse(fileName)
- res.send(author)
+AuthorRouter.get("/",async(req,res,next)=>{
+//  const fileName=fs.readFileSync(AuthorsFileToJson)
+//  const author=JSON.parse(fileName)
+//  res.send(author)
+try{
+     const authors=await authorModel.find()
+     res.send(authors)
+}catch(err){
+    next(err)
+}
 })
 
 
-AuthorRouter.get("/:authorId",(req,res)=>{
-    const fileName=fs.readFileSync(AuthorsFileToJson)
- const author=JSON.parse(fileName)
- const singleAuthor=author.find(a=>a.id===req.params.authorId)
-    res.send(singleAuthor)
+AuthorRouter.get("/:authorId",async(req,res,next)=>{
+    try{
+        const author=await authorModel.findById(req.params.authorId)
+        if(author){
+         res.send(author)
+        }else{
+         res.send((createHttpError(404, `Author with id ${req.params.authorId} not found!`))) 
+
+        }
+       
+    }catch(err){
+        next(err)
+    }
+ 
 })
 
-AuthorRouter.put("/:authorId",(req,res)=>{
-    const fileName=fs.readFileSync(AuthorsFileToJson)
-    const array=JSON.parse(fileName)
-   const index=array.findIndex(a=>a.id===req.params.authorId)
-
-   const current=array[index]
-   
-   const updated={...current,...req.body}
-   array[index]=updated
-   fs.writeFileSync(AuthorsFileToJson,JSON.stringify(array))
-   
-   res.send(updated)
+AuthorRouter.put("/:authorId",async(req,res,next)=>{
+    try{
+        let updated=await authorModel.findByIdAndUpdate(
+            req.params.authorId,
+            req.body,
+            {new:true,runValidators:true}
+        
+        )
+        if(updated){
+            res.send(updated)
+        }else{
+            next(createHttpError(404, `Author with id ${req.params.authorId} not found!`))
+        
+        }
+    }catch(err){
+        next(err)
+    }
+  
 })
 
 
-AuthorRouter.delete("/:authorId",(req,res)=>{
-    const fileName=fs.readFileSync(AuthorsFileToJson)
-    const array=JSON.parse(fileName)
-    const remaining=array.filter(a=>a.id!==req.params.authorId)
-    fs.writeFileSync(AuthorsFileToJson,JSON.stringify(remaining))
-    res.status(204).send()
+AuthorRouter.delete("/:authorId",async(req,res,next)=>{
+    try{
+        const deleted= await authorModel.findByIdAndDelete(req.params.authorId)
+        if(deleted){
+            res.status(204).send()
+        }
+    }catch(err){
+        next(err)
+    }
+
 })
 
 //----------}
 
-AuthorRouter.get("/:authorId/blogPosts",(req,res)=>{
-    const fileName=fs.readFileSync(AuthorsFileToJson)
-    const author=JSON.parse(fileName)
-    const blogFileName=fs.readFileSync(BlogsToJson)
-    const array=JSON.parse(blogFileName)
-    const singleAuthor=author.find(a=>a.id===req.params.authorId)
-    const corresponding=array.filter(a=>a.author.name===singleAuthor.name)
-    res.send(corresponding)
-})
+// AuthorRouter.get("/:authorId/blogPosts",(req,res)=>{
+//     const fileName=fs.readFileSync(AuthorsFileToJson)
+//     const author=JSON.parse(fileName)
+//     const blogFileName=fs.readFileSync(BlogsToJson)
+//     const array=JSON.parse(blogFileName)
+//     const singleAuthor=author.find(a=>a.id===req.params.authorId)
+//     const corresponding=array.filter(a=>a.author.name===singleAuthor.name)
+//     res.send(corresponding)
+// })
 
 // AuthorRouter.post("/:authorId/register", async(req,res,next)=>{
 //     try{
