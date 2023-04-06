@@ -1,13 +1,15 @@
-
+import createHttpError from "http-errors"
 import  Express  from "express";
 import listEndpoints from "express-list-endpoints";
 import AuthorRouter from "./authors/index.js";
 import { dirname,join } from "path";
 import cors from 'cors';
 import BlogsRouter from "./books/index.js";
-import { badRequestHandler, genericErrorHandler, notFoundHandler, unauthorizedHandler } from "./errorHandlers.js";
+import { badRequestHandler, genericErrorHandler, notFoundHandler, unauthorizedErrorHandler,forbiddenErrorHandler } from "./errorHandlers.js";
 import filesRouter from "./files/index.js";
 import mongoose from "mongoose";
+import passport from "passport";
+import googleStartegy from "../lib/auth/googleAuth.js";
 const app=Express()
 
 const port=3003
@@ -16,11 +18,27 @@ const port=3003
 //     next()
 // }
 const publicFolderPath=join(process.cwd(),"./public")
+
+passport.use("google", googleStartegy)
+
+const whiteList = ["http://localhost:3000"]
 //If it has next is it slikely a middleaware
 // app.use(loggerMiddleware)
+const corsOpt = {
+    origin: (currentOrigin, corsNext) => {
+      if (!currentOrigin || whiteList.indexOf(currentOrigin) !== -1) {
+        corsNext(null, true);
+      } else {
+        corsNext(
+          createHttpError(400, `Origin ${currentOrigin} is not in the whitelist!`)
+        );
+      }
+    },
+  };
 app.use(Express.static(publicFolderPath))
-app.use(cors())
+app.use(cors(corsOpt))
 app.use(Express.json())
+app.use(passport.initialize())
 
 //It needs to alwys be b4 the endpoints
 app.use("/authors",AuthorRouter)
@@ -31,9 +49,11 @@ app.use("/blogPosts",filesRouter)
 
 
 app.use(badRequestHandler)
-app.use(unauthorizedHandler) 
+app.use(unauthorizedErrorHandler) 
+app.use(forbiddenErrorHandler) 
 app.use(notFoundHandler) 
 app.use(genericErrorHandler)
+
 
 mongoose.connect(process.env.MONGO_URL)
 mongoose.connection.on("connected",()=>{

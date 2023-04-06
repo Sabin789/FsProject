@@ -9,6 +9,10 @@ import blogSchema from "../validation/model.js";
 import { saveUserAvatar } from "../../lib/fs-tools.js";
 import q2m from "query-to-mongo"
 import authorModel from "../validation/authorModel.js";
+import { basicAuthMiddleware } from "../../lib/auth/basic.js";
+import { adminMiddleware } from "../../lib/auth/admin.js";
+import { JWTAuthMiddleware } from "../../lib/jwt.js";
+
 // const BlogsToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/blogs.json")
 // console.log(BlogsToJson)
 // console.log(BlogsToJson)
@@ -22,21 +26,23 @@ const BlogsRouter=Express.Router()
 
 BlogsRouter.post("/",async(req,res,next)=>{
     try{
+ const newBlog = new blogSchema(req.body);
+const {_id} = await newBlog.save();
 
-  const newBlog=new blogSchema(req.body)
-const {_id}=await newBlog.save()
-  
- res.status(201).send({_id:_id})
-
-
-
+const authors = await authorModel.updateMany(
+  { _id: { $in: newBlog.authors } },
+  { $push: { blogs: _id } }
+);
+res.status(201).send({_id});
     }catch(err){
-  
-return  next(err)     }
+
+return  next(err)     
+
+}
   
 })
 
-BlogsRouter.get("/",async(req,res,next)=>{
+BlogsRouter.get("/",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
 try{
     console.log("req.query:", req.query)
     console.log("q2m:", q2m(req.query))
@@ -55,15 +61,60 @@ try{
       numberOfPages: Math.ceil(total / mongoQuery.options.limit),
       allBlogs,
     })
+    console.log(allBlogs.map(m=>m.authors))
 }catch(err){
      res.send(next(err))
     }
+})
 
+BlogsRouter.get("/me/:blogId",JWTAuthMiddleware,async(req,res,next)=>{
+    try {
+        if(req.author.blogs.includes(req.params.blogId)){
+            const blog= await blogSchema.findById(req.params.blogId)
+            res.send(blog)
+        }else{
+            res.send((createHttpError(403, `You are not the author of this blog`))) 
+            console.log(req.author.blogs)
+        }
+    } catch (error) {
+        next(error)
+    }
+})
 
+BlogsRouter.put("/me/:blogId",JWTAuthMiddleware,async(req,res,next)=>{
+    try {
+        if(req.author.blogs.includes(req.params.blogId)){
+            const blog= await blogSchema.findByIdAndUpdate(
+                req.params.blogId,
+                req.body,
+                {new:true, runValidators:true}
+                )
+            res.send(blog)
+        }else{
+            res.send((createHttpError(403, `You are not the author of this blog`))) 
+            console.log(req.author.blogs)
+        }
+    } catch (error) {
+        next(error)
+    }
+})
+
+BlogsRouter.delete("/me/:blogId",JWTAuthMiddleware,async(req,res,next)=>{
+    try {
+        if(req.author.blogs.includes(req.params.blogId)){
+            const blog= await blogSchema.findByIdAndDelete(req.params.blogId)
+            res.status(204).send()
+        }else{
+            res.send((createHttpError(403, `You are not the author of this blog`))) 
+            console.log(req.author.blogs)
+        }
+    } catch (error) {
+        next(error)
+    }
 })
 
 
-BlogsRouter.get("/:blogId",notFoundHandler,async(req,res,next)=>{
+BlogsRouter.get("/:blogId",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
     try{
 const blog=await blogSchema.findById(req.params.blogId)
    if(blog){
@@ -77,7 +128,7 @@ res.send(blog)
 })
 
 
-BlogsRouter.put("/:blogId",async (req,res,next)=>{
+BlogsRouter.put("/:blogId",JWTAuthMiddleware,adminMiddleware,async (req,res,next)=>{
     try{
 //     const blogs=await getBlogs()
 //     const index=blogs.findIndex(a=>a._id===req.params.blogId)
@@ -106,7 +157,7 @@ if(updated){
 })
 
 
-BlogsRouter.delete("/:blogId",async(req,res,next)=>{
+BlogsRouter.delete("/:blogId",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
     try{
 //     const blogs=await getBlogs()
 //     const remaining=blogs.filter(a=>a._id!==req.params.blogId)
@@ -275,7 +326,13 @@ BlogsRouter.delete("/:blogId/comments/:commentId",async(req,res,next)=>{
 
 //Embedded
 
-BlogsRouter.post("/:blogId/")
+// BlogsRouter.post("/:blogId/like", async (req,res,next)=>{
+//     try{
+        
+//     }catch(err){
+//         next(err)
+//     }
+// })
 
 
 

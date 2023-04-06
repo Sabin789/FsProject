@@ -1,9 +1,15 @@
 import  Express  from "express";
 import fs from "fs"
 import { fileURLToPath } from "url"; 
-import { dirname,join } from "path";
+import path, { dirname,join } from "path";
 import createHttpError from "http-errors"
 import authorModel from "../validation/authorModel.js";
+import { basicAuthMiddleware } from "../../lib/auth/basic.js";
+import { adminMiddleware } from "../../lib/auth/admin.js"
+import { createAccesToken, createRefreshToken } from "../../lib/auth/tools.js";
+import { JWTAuthMiddleware } from "../../lib/jwt.js";
+import passport from "passport";
+
 const AuthorsFileToJson=join(dirname(fileURLToPath(import.meta.url)),"../data/authors.json")
 console.log(AuthorsFileToJson)
 //1
@@ -14,7 +20,33 @@ const AuthorRouter=Express.Router()
 
 
 //-------------2{
-AuthorRouter.post("/",async (req,res,next)=>{
+
+
+    AuthorRouter.get("/googleLogin",
+    passport.authenticate("google",
+    {scope:["profile","email"]}),
+    (req,res,next)=>{
+        try {
+            res.send()
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    AuthorRouter.get("/googleRedirect",
+    passport.authenticate("google"),
+//    {session:false},
+    (req,res,next)=>{
+        try {
+            res.redirect(`${process.env.mainUrl}?accessToken=${req.author.accessToken}`)
+        } catch (error) {
+            next(error)
+        }
+    })
+    
+
+
+AuthorRouter.post("/register", async (req,res,next)=>{
     try{
      const authors= await authorModel.find()
 
@@ -37,7 +69,7 @@ AuthorRouter.post("/",async (req,res,next)=>{
  )
 
 
-AuthorRouter.get("/",async(req,res,next)=>{
+AuthorRouter.get("/",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
 //  const fileName=fs.readFileSync(AuthorsFileToJson)
 //  const author=JSON.parse(fileName)
 //  res.send(author)
@@ -50,7 +82,55 @@ try{
 })
 
 
-AuthorRouter.get("/:authorId",async(req,res,next)=>{
+
+
+AuthorRouter.get("/me",JWTAuthMiddleware, async (req,res,next)=>{
+    try{
+
+        const user=await authorModel.findById(req.author._id)
+        res.send(user)
+   
+    }catch(err){
+        next(err)
+    }
+})
+AuthorRouter.get("/me/stories",JWTAuthMiddleware, async (req,res,next)=>{
+    try{
+
+        const user=await authorModel.findById(req.author._id)
+        const stories=  user.blogs//.populate({path:"Blog", select:["title"]})
+        
+        res.send(stories)
+
+    }catch(err){
+        next(err)
+    }
+})
+
+AuthorRouter.put("/me",JWTAuthMiddleware, async (req,res,next)=>{
+    try{
+        const updated=await authorModel.findOneAndUpdate(
+            {_id:req.author._id},
+            req.body,
+            {new:true, runValidators:true}
+            )
+        res.send(updated)
+  
+    }catch(err){
+        next(err)
+    }
+})
+
+AuthorRouter.delete("/me", JWTAuthMiddleware, async (req, res, next) => {
+    try {
+      await authorModel.findOneAndDelete(req.author._id)
+      res.status(204).send()
+    } catch (error) {
+      next(error)
+    }
+  })
+
+AuthorRouter.get("/:authorId",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
     try{
         const author=await authorModel.findById(req.params.authorId)
         if(author){
@@ -66,7 +146,7 @@ AuthorRouter.get("/:authorId",async(req,res,next)=>{
  
 })
 
-AuthorRouter.put("/:authorId",async(req,res,next)=>{
+AuthorRouter.put("/:authorId",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
     try{
         let updated=await authorModel.findByIdAndUpdate(
             req.params.authorId,
@@ -87,7 +167,7 @@ AuthorRouter.put("/:authorId",async(req,res,next)=>{
 })
 
 
-AuthorRouter.delete("/:authorId",async(req,res,next)=>{
+AuthorRouter.delete("/:authorId",JWTAuthMiddleware,adminMiddleware,async(req,res,next)=>{
     try{
         const deleted= await authorModel.findByIdAndDelete(req.params.authorId)
         if(deleted){
@@ -98,6 +178,28 @@ AuthorRouter.delete("/:authorId",async(req,res,next)=>{
     }
 
 })
+
+AuthorRouter.post("/login", async(req,res,next)=>{
+    try {
+        const {email,password}=req.body
+
+     const author=await authorModel.checkCredentials(email,password)
+     if(author){
+   const payload={_id:author._id,role:author.role}
+   console.log(payload)
+   const accessToken=await createAccesToken(payload)
+   const refreshToken=await createRefreshToken({_id:author._id})
+   res.send({accessToken})
+   console.log({accessToken})
+     }else{
+        next(createHttpError(401,"Invalid Credentials"))
+     }
+    } catch (error) {
+        next(error)
+    }
+})
+
+
 
 //----------}
 

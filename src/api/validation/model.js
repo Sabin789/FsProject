@@ -8,7 +8,7 @@ const blogSchema= new Schema({
     cover:{type:String,default:""},
     readTime:{
         value:{type:Number,required:true},
-        unit:{type:String,required:true,enum: ["history", "romance", "horror", "fantasy"],}
+        unit:{type:String,required:true,enum: ["minutes","hours"],}
     },
     authors:[{type:Schema.Types.ObjectId, ref:"Author"}],
     comments:[
